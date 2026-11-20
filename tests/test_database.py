@@ -4,7 +4,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from app.models import DailyStatistic, FocusSession, Habit, HabitLog, Project, Task, User
+from app.models import DailyStatistic, FocusSession, Goal, Habit, HabitLog, Project, Task, User
 
 
 async def test_constraints_and_ownership(app):
@@ -16,7 +16,8 @@ async def test_constraints_and_ownership(app):
             await db.flush()
             project = Project(title="Project", user_id=first.id)
             habit = Habit(title="Habit", user_id=first.id)
-            db.add_all([project, habit])
+            goal = Goal(title="Goal", user_id=first.id)
+            db.add_all([project, habit, goal])
             await db.flush()
             day = date(2026, 1, 1)
             db.add_all([
@@ -28,6 +29,14 @@ async def test_constraints_and_ownership(app):
         now = datetime.now(UTC)
         invalid_records = [
             Task(user_id=second.id, project_id=project.id, title="Cross-owner task"),
+            Task(user_id=second.id, goal_id=goal.id, title="Cross-owner goal"),
+            Task(user_id=first.id, title="No scheduled date", scheduled_start_at=now),
+            Task(user_id=first.id, title="End precedes start", scheduled_on=day,
+                 scheduled_start_at=now, scheduled_end_at=now - timedelta(seconds=1)),
+            Project(user_id=first.id, title="Invalid dates",
+                    starts_on=day, target_on=day - timedelta(days=1)),
+            Goal(user_id=first.id, title="Invalid progress", progress=101),
+            Goal(user_id=first.id, title="Missing completion timestamp", progress=100),
             HabitLog(user_id=second.id, habit_id=habit.id, logged_on=day),
             HabitLog(user_id=first.id, habit_id=habit.id, logged_on=day),
             DailyStatistic(user_id=first.id, statistic_on=day),

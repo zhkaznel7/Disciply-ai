@@ -42,40 +42,82 @@ class UserSettings(Record, Owned, Base):
     week_starts_on: Mapped[int] = mapped_column(server_default="0")
 
 
-class Goal(Record, Owned, Base):
+class PlanningRecord:
+    description: Mapped[str | None] = mapped_column(sa.String(4000))
+    updated_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.clock_timestamp()
+    )
+
+
+class Goal(PlanningRecord, Record, Owned, Base):
     __tablename__ = "goals"
-    __table_args__ = (sa.UniqueConstraint("user_id", "id"),)
+    __table_args__ = (
+        sa.UniqueConstraint("user_id", "id"),
+        sa.CheckConstraint("priority BETWEEN 0 AND 3", name="priority"),
+        sa.CheckConstraint("progress BETWEEN 0 AND 100", name="progress"),
+        sa.CheckConstraint("(progress = 100) = (completed_at IS NOT NULL)", name="completion"),
+    )
     title: Mapped[str] = mapped_column(sa.String(200))
     target_on: Mapped[date | None]
     completed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    priority: Mapped[int] = mapped_column(server_default="0")
+    progress: Mapped[int] = mapped_column(server_default="0")
+
+    @property
+    def status(self) -> str:
+        return "completed" if self.completed_at is not None else "active"
 
 
-class Project(Record, Owned, Base):
+class Project(PlanningRecord, Record, Owned, Base):
     __tablename__ = "projects"
     __table_args__ = (
         sa.UniqueConstraint("user_id", "id"),
         sa.ForeignKeyConstraint(["user_id", "goal_id"], ["goals.user_id", "goals.id"]),
         sa.Index(None, "user_id", "goal_id"),
+        sa.CheckConstraint("target_on >= starts_on", name="date_order"),
     )
     goal_id: Mapped[UUID | None]
     title: Mapped[str] = mapped_column(sa.String(200))
     archived_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    starts_on: Mapped[date | None]
+    target_on: Mapped[date | None]
+
+    @property
+    def status(self) -> str:
+        return "archived" if self.archived_at is not None else "active"
 
 
-class Task(Record, Owned, Base):
+class Task(PlanningRecord, Record, Owned, Base):
     __tablename__ = "tasks"
     __table_args__ = (
         sa.ForeignKeyConstraint(["user_id", "project_id"], ["projects.user_id", "projects.id"]),
         sa.CheckConstraint("priority BETWEEN 0 AND 3", name="priority"),
+        sa.ForeignKeyConstraint(["user_id", "goal_id"], ["goals.user_id", "goals.id"]),
+        sa.CheckConstraint(
+            "scheduled_start_at IS NULL OR scheduled_on IS NOT NULL", name="scheduled_date"
+        ),
+        sa.CheckConstraint(
+            "scheduled_end_at IS NULL OR "
+            "(scheduled_start_at IS NOT NULL AND scheduled_end_at > scheduled_start_at)",
+            name="scheduled_time_order",
+        ),
+        sa.Index(None, "user_id", "goal_id"),
         sa.Index(None, "user_id", "scheduled_on"),
         sa.Index(None, "user_id", "project_id"),
     )
     project_id: Mapped[UUID | None]
+    goal_id: Mapped[UUID | None]
     title: Mapped[str] = mapped_column(sa.String(200))
     scheduled_on: Mapped[date | None]
+    scheduled_start_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    scheduled_end_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
     due_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
     priority: Mapped[int] = mapped_column(server_default="0")
+
+    @property
+    def status(self) -> str:
+        return "completed" if self.completed_at is not None else "open"
 
 
 class Habit(Record, Owned, Base):

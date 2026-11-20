@@ -1,6 +1,6 @@
 # Disciply AI backend
 
-Phase 1 is an async FastAPI backend for account management and the first PostgreSQL schema for planning and productivity.
+Disciply AI is an async FastAPI backend for account management, goals, projects, tasks, and daily and weekly planning.
 
 ## Windows 11 with Docker Desktop
 
@@ -51,6 +51,8 @@ $env:TEST_DATABASE_URL = Read-Host 'Dedicated PostgreSQL asyncpg test database U
 .\.venv\Scripts\python.exe -m pytest -q
 Remove-Item Env:TEST_DATABASE_URL
 ```
+
+For an existing Docker setup, rebuild the API image and run `docker compose run --rm api alembic upgrade head` before restarting the API. Phase 2 upgrades existing databases from revision `0001` to `0002`.
 
 Use `alembic current` to inspect the deployed revision and `alembic check` to detect model drift. Pass either command to `docker compose run --rm api` when using Docker. Review generated revisions before applying them. The initial downgrade drops Phase 1 tables and their data.
 

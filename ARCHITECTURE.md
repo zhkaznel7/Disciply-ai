@@ -2,7 +2,7 @@
 
 The backend is a modular monolith. `app/main.py` creates the FastAPI application and manages the SQLAlchemy async engine. `app/config.py` validates environment settings. `app/middleware.py` enforces request limits and browser Origin checks. `app/api.py` owns HTTP routes and cookies, `app/schemas.py` defines public payloads, `app/services.py` owns authentication transactions, `app/repositories.py` handles queries, and `app/models.py` defines database constraints. `migrations/` holds explicit Alembic revisions. `tests/` exercises real PostgreSQL through HTTPX and SQLAlchemy.
 
-Future tasks, goals, projects, habits, focus sessions, and analytics should get domain routers under `/api/v1`, with services and owner-scoped queries. Reuse the authenticated-user dependency and take ownership from the verified session. Pass the resulting user ID explicitly to repository methods. Cross-table owner constraints provide a second check in PostgreSQL.
+Future habits, focus sessions, and analytics should follow the domain router, service, and owner-scoped query pattern under `/api/v1`. Reuse the authenticated-user dependency and take ownership from the verified session. Pass the resulting user ID explicitly to repository methods. Cross-table owner constraints provide a second check in PostgreSQL.
 
 ## Authentication and deployment
 
@@ -15,3 +15,7 @@ Terminate TLS at a trusted proxy, restrict upstream access to the proxy, and ena
 Inject production secrets, use separate migration and least-privilege application roles, and configure PostgreSQL TLS with certificate verification for remote connections. Apply migrations once before starting new application instances. Back up PostgreSQL and schedule deletion of expired refresh sessions in bounded batches. Rotated credentials stay until the associated session expires so replay detection can cover the full session lifetime.
 
 The access-cookie and JWT integration follows the [FastAPI cookie documentation](https://fastapi.tiangolo.com/advanced/response-cookies/) and [PyJWT validation guidance](https://pyjwt.readthedocs.io/en/stable/api.html).
+
+## Planning modules
+
+`planning_api.py` uses the existing authenticated-user dependency. `planning_schemas.py` defines write fields and typed responses. `planning_service.py` validates state transitions and relationships, locks records for mutations, and commits each write atomically. `planning_repository.py` scopes every resource query to the authenticated owner. PostgreSQL composite foreign keys enforce same-owner links independently of the API. The weekly planner uses one bounded task query and groups results into seven local dates.
