@@ -1,14 +1,14 @@
 import logging
-from time import monotonic
 
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.config import Settings
 from app.errors import error_response
+from app.observability import event
+from app.rate_limit import admit, limit_bucket
 from app.security import AUTH_PATH
 
-logger = logging.getLogger(__name__)
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 
@@ -17,21 +17,6 @@ class RequestGuards:
         self.app = app
         self.settings = settings
         self.origins = frozenset(settings.cors_origins)
-        self.window = -1
-        self.attempts: dict[str, int] = {}
-
-    def allow_auth(self, client: str) -> bool:
-        window = int(monotonic() // 60)
-        if window != self.window:
-            self.window = window
-            self.attempts.clear()
-        if client not in self.attempts and len(self.attempts) >= 4096:
-            return False
-        used = self.attempts.get(client, 0)
-        if used >= self.settings.auth_attempts_per_minute:
-            return False
-        self.attempts[client] = used + 1
-        return True
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send):
         if scope["type"] != "http":
@@ -55,18 +40,27 @@ class RequestGuards:
             await error_response(status, code, message, extra)(scope, receive, send_secure)
 
         try:
+            protected = limit_bucket(path, scope["method"], self.settings)
             if scope["method"] not in SAFE_METHODS:
                 origins = headers.getlist("origin")
                 if len(origins) != 1 or origins[0] not in self.origins:
                     return await reject(403, "origin_denied", "Request origin is not allowed.")
-                if path.startswith(f"{AUTH_PATH}/"):
-                    client = scope.get("client")
-                    if not self.allow_auth(client[0] if client else "unknown"):
-                        return await reject(
-                            429, "rate_limited", "Too many authentication requests.",
-                            {"Retry-After": "60"},
-                        )
+            if protected:
+                bucket, limit = protected
+                client = scope.get("client")
+                try:
+                    allowed = await admit(
+                        scope["app"].state.sessions, self.settings,
+                        client[0] if client else "unknown", bucket, limit,
+                    )
+                except Exception as exc:
+                    event("rate_limit_unavailable", level=logging.WARNING, error_type=type(exc).__name__)
+                    return await reject(503, "temporarily_unavailable", "Service is temporarily unavailable.",
+                                        {"Retry-After": "5"})
+                if not allowed:
+                    return await reject(429, "rate_limited", "Too many requests.", {"Retry-After": "60"})
 
+            if scope["method"] not in SAFE_METHODS:
                 buffered = bytearray()
                 while True:
                     incoming = await receive()
@@ -91,7 +85,7 @@ class RequestGuards:
                 return await self.app(scope, bounded_receive, send_secure)
             return await self.app(scope, receive, send_secure)
         except Exception as exc:
-            logger.error("Request failed (%s)", type(exc).__name__)
+            event("request_failed", level=logging.ERROR, error_type=type(exc).__name__)
             if started:
-                raise
+                return
             return await reject(500, "internal_error", "An internal error occurred.")

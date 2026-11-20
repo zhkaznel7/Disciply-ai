@@ -155,3 +155,9 @@ Suggestions include an action code and short vetted text, for example `{"code":"
 Planning ranks overdue tasks first, then tasks due today, tasks scheduled today, and remaining incomplete tasks. Within each group it considers priority, deadline, and schedule. The response displays up to 20 candidates, flags truncation through the candidate count and overload flag, and estimates workload for the displayed tasks. A timed slot today supplies an estimate from the existing schedule. Other tasks use a 15- or 25-minute estimate based on recent focus activity. Suggested focus blocks preserve an existing upcoming start when available and otherwise have a null start. They do not reserve calendar time or alter records.
 
 A request limit breach returns 429. Provider failures, invalid selections, unavailable token budget, or concurrent identical outbound requests fall back to rules. UTC counters reset at midnight. Requests served from cache or rules count toward the request limit.
+
+## Production health and limits
+
+`GET /api/v1/health` is liveness. `GET /api/v1/health/ready` returns 200 only when PostgreSQL is reachable and its Alembic heads match the running image. A non-ready response returns a generic 503. Both are unauthenticated. Keep readiness behind the proxy or on an internal network.
+
+The server adds a generated `X-Request-ID` to responses, including errors. Auth POSTs, expensive analytics GETs, and AI POSTs have independent per-peer minute limits. The defaults are 20, 60, and 20. AI also applies its daily per-account quota. Expect 429 with `Retry-After` when admission is exhausted and a temporary 503 if the shared rate store is unavailable. Cookie-authenticated writes still require a single exact allowed Origin. API documentation is available in development.

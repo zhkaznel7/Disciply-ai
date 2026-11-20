@@ -10,4 +10,4 @@ COPY migrations ./migrations
 COPY alembic.ini ./
 USER disciply
 EXPOSE 8000
-CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--no-proxy-headers", "--no-access-log"]
+CMD ["python", "-m", "app.serve"]

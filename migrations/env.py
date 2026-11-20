@@ -16,7 +16,7 @@ def do_run_migrations(connection):
 
 
 async def run_online():
-    engine = make_engine(settings)
+    engine = make_engine(settings, migration=True)
     try:
         async with engine.connect() as connection:
             await connection.run_sync(do_run_migrations)

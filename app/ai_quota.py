@@ -1,7 +1,8 @@
 import asyncio
 import hashlib
 import json
-from datetime import date
+import logging
+from datetime import UTC, date, datetime, time, timedelta
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +13,7 @@ from app.ai_schemas import Selection, Source, UsageView
 from app.config import Settings
 from app.errors import APIError
 from app.focus_service import now_utc
+from app.observability import event
 
 
 class AIQuota:
@@ -36,7 +38,10 @@ class AIQuota:
         day = now_utc().date()
         row = await repo.usage(self.db, self.owner, day, lock=True)
         if row.request_count >= self.settings.ai_daily_requests:
-            raise APIError(429, "ai_quota_exceeded", "Daily recommendation request limit reached.")
+            midnight = datetime.combine(day + timedelta(days=1), time.min, UTC)
+            remaining = max(1, int((midnight - now_utc()).total_seconds()) + 1)
+            raise APIError(429, "ai_quota_exceeded", "Daily recommendation request limit reached.",
+                           {"Retry-After": str(remaining)})
         row.request_count += 1
         await self.db.commit()
         return day
@@ -83,6 +88,9 @@ class AIQuota:
                 > context["available_minutes"])
         ):
             selection = None
+
+        if selection is None:
+            event("ai_provider_fallback", level=logging.WARNING, reason="unusable_response")
 
         row = await repo.usage(self.db, self.owner, day, lock=True)
         if result.tokens is not None:

@@ -1,4 +1,5 @@
 import re
+from ipaddress import ip_address
 from typing import Literal
 from urllib.parse import urlsplit
 
@@ -10,11 +11,12 @@ from sqlalchemy.exc import ArgumentError
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env", extra="ignore", hide_input_in_errors=True
+        env_file=".env", extra="ignore", hide_input_in_errors=True, env_ignore_empty=True
     )
 
     environment: Literal["development", "test", "production"] = "production"
     database_url: SecretStr
+    migration_database_url: SecretStr | None = None
     jwt_secret: SecretStr
     jwt_issuer: str = "disciply-api"
     jwt_audience: str = "disciply-web"
@@ -24,6 +26,16 @@ class Settings(BaseSettings):
     cors_origins: list[str]
     max_body_bytes: int = Field(16_384, ge=1024, le=1_048_576)
     auth_attempts_per_minute: int = Field(20, ge=1, le=1000)
+
+    analytics_requests_per_minute: int = Field(60, ge=1, le=1000)
+    ai_requests_per_minute: int = Field(20, ge=1, le=1000)
+    trusted_proxy_ips: list[str] = Field(default_factory=list, max_length=16)
+    db_pool_size: int = Field(5, ge=1, le=30)
+    db_max_overflow: int = Field(5, ge=0, le=30)
+    db_pool_timeout_seconds: float = Field(5, ge=1, le=30)
+    db_connect_timeout_seconds: float = Field(5, ge=1, le=30)
+    db_command_timeout_seconds: float = Field(20, ge=1, le=120)
+    readiness_timeout_seconds: float = Field(2, ge=0.5, le=10)
 
     ai_enabled: bool = False
     ai_provider_url: str | None = None
@@ -43,12 +55,26 @@ class Settings(BaseSettings):
         secret = self.jwt_secret.get_secret_value()
         if not re.fullmatch(r"[0-9a-fA-F]{64}", secret) or len(set(secret.lower())) < 10:
             raise ValueError("JWT_SECRET must be a randomly generated 64-character hex string")
+        for database_url in (self.database_url, self.migration_database_url):
+            if database_url is None:
+                continue
+            try:
+                db = make_url(database_url.get_secret_value())
+            except (ValueError, TypeError, ArgumentError):
+                raise ValueError("Database URLs must be valid SQLAlchemy URLs") from None
+            if db.drivername != "postgresql+asyncpg" or not db.database:
+                raise ValueError("Database URLs must specify a PostgreSQL database using asyncpg")
+            if self.environment == "production" and (
+                not db.host or not db.username or not db.password or len(db.password) < 16
+                or db.password.lower() in {"passwordpassword", "changemechangeme", "postgrespostgres"}
+            ):
+                raise ValueError("Production database URLs require a host and strong role credentials")
         try:
-            db = make_url(self.database_url.get_secret_value())
-        except (ValueError, TypeError, ArgumentError):
-            raise ValueError("DATABASE_URL must be a valid SQLAlchemy URL") from None
-        if db.drivername != "postgresql+asyncpg" or not db.database:
-            raise ValueError("DATABASE_URL must specify a PostgreSQL database using asyncpg")
+            if any("%" in peer for peer in self.trusted_proxy_ips):
+                raise ValueError
+            self.trusted_proxy_ips = [str(ip_address(peer)) for peer in self.trusted_proxy_ips]
+        except ValueError:
+            raise ValueError("TRUSTED_PROXY_IPS must list literal proxy addresses") from None
         if self.refresh_seconds <= self.access_seconds:
             raise ValueError("REFRESH_SECONDS must exceed ACCESS_SECONDS")
         if not self.jwt_issuer.strip() or not self.jwt_audience.strip():

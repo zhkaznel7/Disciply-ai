@@ -56,3 +56,27 @@ Phase 5 requires no schema migration. Reflections use the existing `evening_refl
 ## Phase 6 AI usage
 
 Revision `0005` adds one usage row per owner and UTC day. A row lock serializes request counts and token reservations across workers before outbound calls. The lock is released during provider I/O. Reported token counts replace reservations when available. Unreported attempts retain their reservation for that day, and identical summarized inputs reuse validated selections or fall back while a request is pending or failed. Stored selection data is limited to hashes, bounded action codes, and ordinal task references. No raw prompts or provider responses are stored. Downgrading removes the usage rows and leaves earlier tables intact. Operators can prune expired rows by the indexed date after their reporting window.
+
+## Production database operations
+
+Revision `0006` creates shared `request_rates` buckets. Its time-first primary key supports pruning by minute. Schedule pruning as a database maintenance job, for example hourly with `DELETE FROM request_rates WHERE "window" < floor(extract(epoch from now()) / 60)::bigint - 1440`. Schedule `ai_usage` pruning according to the reporting window. Set separate policies for expired refresh sessions, logs, and encrypted backups. Preserve user records under the applicable retention policy.
+
+Use a dedicated migration role that owns the application schema. Give the runtime role `CONNECT` on the database and `USAGE` on the schema. Grant application-required table privileges and read-only access to `alembic_version`. For a fresh install, create both roles with SCRAM passwords using psql's `\password`, set schema ownership, and grant table privileges after migrating. Repeat the necessary grants after future migrations. The runtime role needs no database creation, superuser, or schema ownership privileges. A hosted database outside the private Compose network should use TLS with certificate verification.
+
+Each app process uses `DB_POOL_SIZE` regular connections and up to `DB_MAX_OVERFLOW` extra connections. Budget the aggregate across processes below PostgreSQL capacity and reserve connections for operations. Pool checkout, connection, query, and readiness limits are in `.env.example`. The Alembic process uses the migration URL when supplied and has no application statement deadline. Run migrations as a single operation within a maintenance window when required. PostgreSQL transactional DDL rolls back failed revisions that remain in a transaction. Confirm the current revision and logs before retrying. Restore or reverse a migration only after testing the recovery path.
+
+### Backup and restore drill
+
+Schedule a custom-format logical dump at a frequency that meets your recovery point objective. Put backups in encrypted, access-controlled off-host storage and monitor backup age and restore duration. Keep the PostgreSQL 18 client tools available. On Windows, use `pg_dump --file` to write binary archives.
+
+```powershell
+# Substitute your PostgreSQL host, backup role, and source database.
+pg_dump -h localhost -U backup_role -d disciply --format=custom --file=disciply.dump
+pg_restore --list disciply.dump
+# Use a new database name on an isolated or recovery PostgreSQL instance.
+createdb -h localhost -U recovery_owner disciply_restore_test
+pg_restore -h localhost -U recovery_owner -d disciply_restore_test --exit-on-error --single-transaction --no-owner --no-privileges disciply.dump
+psql -h localhost -U recovery_owner -d disciply_restore_test -c 'SELECT version_num FROM alembic_version;'
+```
+
+Use an administrative connection and `pg_dump --file` inside the database container when the database is private to Compose. Copy the finished archive out with `docker compose cp`. Keep archive credentials out of arguments and logs by using PostgreSQL's password prompt or protected passfile. Back up role and grant definitions separately, and reapply intended permissions before promotion. Verify representative records, database ownership, Alembic revision, and readiness on the restored database. A logical dump is a point-in-time snapshot and does not provide continuous recovery.

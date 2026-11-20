@@ -17,7 +17,9 @@ from app.db import make_engine
 from app.errors import APIError, error_response
 from app.focus_api import router as focus_router
 from app.habit_api import router as habit_router
+from app.health import expected_heads, router as health_router
 from app.middleware import RequestGuards
+from app.observability import RequestTelemetry
 from app.planning_api import router as planning_router
 from app.productivity_api import router as productivity_router
 from app.security import API_PATH, Passwords
@@ -37,6 +39,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     await connection.execute(text("SELECT 1"))
             except Exception:
                 raise RuntimeError("Database connection failed during startup") from None
+            app.state.alembic_heads = expected_heads()
+            app.state.readiness_timeout = settings.readiness_timeout_seconds
             app.state.sessions = async_sessionmaker(engine, expire_on_commit=False)
             passwords = Passwords()
             dummy_hash = await passwords.hash(secrets.token_urlsafe(32))
@@ -63,6 +67,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         redirect_slashes=False,
     )
     app.include_router(router)
+    app.include_router(health_router)
     app.include_router(planning_router)
     app.include_router(habit_router)
     app.include_router(focus_router)
@@ -71,7 +76,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.exception_handler(APIError)
     async def handle_api_error(request: Request, exc: APIError):
-        return error_response(exc.status, exc.code, exc.message)
+        return error_response(exc.status, exc.code, exc.message, exc.headers)
 
     @app.exception_handler(RequestValidationError)
     async def handle_validation(request: Request, exc: RequestValidationError):
@@ -90,5 +95,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(
         CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"], allow_headers=["Content-Type"],
+        expose_headers=["X-Request-ID", "Retry-After"],
     )
+    app.add_middleware(RequestTelemetry)
     return app

@@ -12,8 +12,9 @@ class ErrorResponse(BaseModel):
 
 
 class APIError(Exception):
-    def __init__(self, status: int, code: str, message: str):
+    def __init__(self, status: int, code: str, message: str, headers: dict[str, str] | None = None):
         self.status, self.code, self.message = status, code, message
+        self.headers = headers
 
 
 def unauthorized():

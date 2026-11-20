@@ -281,3 +281,12 @@ class AIUsage(Record, Owned, Base):
     reported_tokens: Mapped[int] = mapped_column(server_default="0")
     budgeted_tokens: Mapped[int] = mapped_column(server_default="0")
     selections: Mapped[dict] = mapped_column(JSONB, server_default=sa.text("'{}'::jsonb"))
+
+
+class RequestRate(Base):
+    __tablename__ = "request_rates"
+    __table_args__ = (sa.CheckConstraint("hits > 0", name="positive_hits"),)
+    window: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True)
+    bucket: Mapped[str] = mapped_column(sa.String(12), primary_key=True)
+    fingerprint: Mapped[bytes] = mapped_column(sa.LargeBinary(32), primary_key=True)
+    hits: Mapped[int]

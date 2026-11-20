@@ -1,6 +1,7 @@
 import os
 import secrets
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from alembic import command
@@ -46,7 +47,9 @@ async def app(settings, migrated):
 
 @pytest.fixture
 async def client(app):
+    peer = f"fd00:{uuid4().hex[:4]}:{uuid4().hex[:4]}:{uuid4().hex[:4]}::1"
     async with AsyncClient(
-        transport=ASGITransport(app=app), base_url=ORIGIN, headers={"Origin": ORIGIN}
+        transport=ASGITransport(app=app, client=(peer, 12345)),
+        base_url=ORIGIN, headers={"Origin": ORIGIN}
     ) as session:
         yield session
