@@ -26,3 +26,25 @@ Future recommendations, achievements, notifications, XP, and accountability reco
 Revision `0002` adds descriptions and update timestamps to goals, projects, and tasks. Existing update timestamps are backfilled from creation time. Existing completed goals receive progress 100, with other goals starting at 0. Goal status derives from its completion timestamp. Project status derives from its archive timestamp, and task status derives from its completion timestamp.
 
 The migration adds project date bounds, task schedule timestamps, and an optional same-owner task-to-goal foreign key. PostgreSQL checks enforce valid progress, completion consistency, and schedule ordering. A goal or project referenced by another record must be unlinked before deletion. Downgrading to `0001` preserves Phase 1 rows and removes Phase 2 fields and constraints.
+
+## Phase 3 migration
+
+Revision `0003` extends the existing habit and log tables. It backfills update timestamps from creation time, gives legacy logs a count of 1, and initializes legacy habits as daily with a target count of 1. A legacy habit starts on the earlier of its UTC creation date and first stored local log date. Existing UUIDs, ownership, and log dates are preserved.
+
+Weekdays are stored as a seven-bit mask. Checks enforce valid combinations of frequency, weekdays, weekly quota, and count bounds. The existing unique owner/habit/date key prevents duplicate log dates and supports ordered history queries. The owner-scoped habit foreign key cascades on permanent deletion. No streak aggregates are stored. Downgrading to `0002` preserves habit and log rows while removing Phase 3 fields.
+
+## Phase 4 migration
+
+Revision `0004` adds focus session states, session types, planned minutes, task links, and interval history. A partial unique index enforces one unfinished session per owner. Each session can have at most one open interval. Durations are derived from timestamps. A composite task foreign key clears only the task ID on deletion, preserving ownership and focus history. [PostgreSQL foreign-key actions](https://www.postgresql.org/docs/18/ddl-constraints.html)
+
+Legacy focus rows become completed when they have an end timestamp and active otherwise. Each gets one interval using its original timestamps. If any account has multiple unfinished legacy rows, migration stops and rolls back. Review the affected owners with the query below. Reconcile redundant open rows by recording verified end timestamps that are after their start times, leaving at most one open row per owner before rerunning the migration.
+
+```sql
+SELECT user_id, count(*) AS unfinished
+FROM focus_sessions
+WHERE ended_at IS NULL
+GROUP BY user_id
+HAVING count(*) > 1;
+```
+
+Schedule migration during a maintenance window because its preflight locks the focus table through backfill. Downgrade to `0003` retains the original session rows and start/end timestamps. Phase 4 state, task associations, and pause intervals are lost on downgrade.

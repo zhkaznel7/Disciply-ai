@@ -1,10 +1,11 @@
 from uuid import UUID
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import RefreshCredential, RefreshSession, User
+from app.models import RefreshCredential, RefreshSession, User, UserSettings
 
 
 async def add_user(db: AsyncSession, email: str, password_hash: str) -> User | None:
@@ -57,3 +58,11 @@ async def active_user(db: AsyncSession, user_id: UUID, session_id: UUID) -> User
             RefreshSession.expires_at > func.now(),
         )
     )
+
+
+async def user_timezone(db: AsyncSession, owner: UUID) -> ZoneInfo:
+    name = await db.scalar(select(UserSettings.timezone).where(UserSettings.user_id == owner))
+    try:
+        return ZoneInfo(name or "UTC")
+    except (ZoneInfoNotFoundError, ValueError):
+        return ZoneInfo("UTC")

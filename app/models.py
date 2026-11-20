@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, time
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
@@ -90,6 +90,7 @@ class Project(PlanningRecord, Record, Owned, Base):
 class Task(PlanningRecord, Record, Owned, Base):
     __tablename__ = "tasks"
     __table_args__ = (
+        sa.UniqueConstraint("user_id", "id"),
         sa.ForeignKeyConstraint(["user_id", "project_id"], ["projects.user_id", "projects.id"]),
         sa.CheckConstraint("priority BETWEEN 0 AND 3", name="priority"),
         sa.ForeignKeyConstraint(["user_id", "goal_id"], ["goals.user_id", "goals.id"]),
@@ -120,11 +121,36 @@ class Task(PlanningRecord, Record, Owned, Base):
         return "completed" if self.completed_at is not None else "open"
 
 
-class Habit(Record, Owned, Base):
+class Habit(PlanningRecord, Record, Owned, Base):
     __tablename__ = "habits"
-    __table_args__ = (sa.UniqueConstraint("user_id", "id"),)
+    __table_args__ = (
+        sa.UniqueConstraint("user_id", "id"),
+        sa.CheckConstraint("target_count BETWEEN 1 AND 1000000", name="target_count"),
+        sa.CheckConstraint(
+            "(frequency = 'daily' AND weekday_mask = 0 AND weekly_target IS NULL) OR "
+            "(frequency = 'weekdays' AND weekday_mask BETWEEN 1 AND 127 AND weekly_target IS NULL) OR "
+            "(frequency = 'weekly' AND weekday_mask = 0 AND weekly_target IS NOT NULL "
+            "AND weekly_target BETWEEN 1 AND 7)", name="schedule",
+        ),
+    )
     title: Mapped[str] = mapped_column(sa.String(200))
+    frequency: Mapped[str] = mapped_column(sa.String(8), server_default="daily")
+    weekday_mask: Mapped[int] = mapped_column(server_default="0")
+    weekly_target: Mapped[int | None]
+    target_count: Mapped[int] = mapped_column(server_default="1")
+    preferred_time: Mapped[time | None]
+    starts_on: Mapped[date] = mapped_column(
+        server_default=sa.text("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date")
+    )
     archived_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+
+    @property
+    def status(self) -> str:
+        return "archived" if self.archived_at is not None else "active"
+
+    @property
+    def weekdays(self) -> list[int]:
+        return [day for day in range(7) if self.weekday_mask & (1 << day)]
 
 
 class HabitLog(Record, Owned, Base):
@@ -134,17 +160,55 @@ class HabitLog(Record, Owned, Base):
             ["user_id", "habit_id"], ["habits.user_id", "habits.id"], ondelete="CASCADE"
         ),
         sa.UniqueConstraint("user_id", "habit_id", "logged_on"),
+        sa.CheckConstraint("count BETWEEN 1 AND 1000000", name="count"),
     )
     habit_id: Mapped[UUID]
     logged_on: Mapped[date]
+    count: Mapped[int] = mapped_column(server_default="1")
+    updated_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.clock_timestamp()
+    )
 
 
 class FocusSession(Record, Owned, Base):
     __tablename__ = "focus_sessions"
     __table_args__ = (
         sa.CheckConstraint("ended_at IS NULL OR ended_at > started_at", name="time_order"),
+        sa.CheckConstraint("session_type IN ('focus', 'short_break', 'long_break')", name="type"),
+        sa.CheckConstraint("planned_minutes BETWEEN 1 AND 1440", name="planned_duration"),
+        sa.CheckConstraint(
+            "(status IN ('active', 'paused') AND ended_at IS NULL) OR "
+            "(status IN ('completed', 'cancelled') AND ended_at IS NOT NULL)", name="state",
+        ),
+        sa.ForeignKeyConstraint(
+            ["user_id", "task_id"], ["tasks.user_id", "tasks.id"], ondelete="SET NULL (task_id)"
+        ),
         sa.Index(None, "user_id", "started_at"),
+        sa.Index(None, "user_id", "task_id", postgresql_where=sa.text("task_id IS NOT NULL")),
+        sa.Index(None, "user_id", "ended_at", postgresql_where=sa.text("status = 'completed'")),
+        sa.Index("uq_focus_sessions_unfinished", "user_id", unique=True,
+                 postgresql_where=sa.text("ended_at IS NULL")),
     )
+    task_id: Mapped[UUID | None]
+    session_type: Mapped[str] = mapped_column(sa.String(11), server_default="focus")
+    status: Mapped[str] = mapped_column(sa.String(9), server_default="active")
+    planned_minutes: Mapped[int] = mapped_column(server_default="25")
+    started_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True))
+    ended_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.clock_timestamp()
+    )
+
+
+class FocusInterval(Record, Base):
+    __tablename__ = "focus_intervals"
+    __table_args__ = (
+        sa.CheckConstraint("ended_at IS NULL OR ended_at >= started_at", name="time_order"),
+        sa.Index(None, "session_id"),
+        sa.Index("uq_focus_intervals_open", "session_id", unique=True,
+                 postgresql_where=sa.text("ended_at IS NULL")),
+    )
+    session_id: Mapped[UUID] = mapped_column(sa.ForeignKey("focus_sessions.id", ondelete="CASCADE"))
     started_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True))
     ended_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
 

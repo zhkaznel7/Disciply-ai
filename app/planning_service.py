@@ -1,6 +1,6 @@
 from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +9,7 @@ from app import planning_repository as repository
 from app.errors import APIError
 from app.models import Goal, Project, Task
 from app.planning_repository import Record
+from app.repositories import user_timezone
 from app.planning_schemas import (
     DailyPlan, GoalCreate, GoalFilters, GoalUpdate, GoalView, Page,
     Pagination, PlannerDay, ProjectCreate, ProjectFilters, ProjectUpdate,
@@ -129,11 +130,7 @@ class PlanningService:
         return await self._save(task)
 
     async def _timezone(self) -> ZoneInfo:
-        name = await repository.timezone_name(self.db, self.owner)
-        try:
-            return ZoneInfo(name)
-        except (ZoneInfoNotFoundError, ValueError):
-            return ZoneInfo("UTC")
+        return await user_timezone(self.db, self.owner)
 
     async def _validate_schedule(self, task: Task) -> None:
         start, end = task.scheduled_start_at, task.scheduled_end_at

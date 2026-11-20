@@ -1,6 +1,6 @@
 # Disciply AI backend
 
-Disciply AI is an async FastAPI backend for account management, goals, projects, tasks, and daily and weekly planning.
+Disciply AI is an async FastAPI backend for account management, goals, projects, tasks, daily and weekly planning, habit tracking, and focus sessions with Pomodoro.
 
 ## Windows 11 with Docker Desktop
 
@@ -52,7 +52,7 @@ $env:TEST_DATABASE_URL = Read-Host 'Dedicated PostgreSQL asyncpg test database U
 Remove-Item Env:TEST_DATABASE_URL
 ```
 
-For an existing Docker setup, rebuild the API image and run `docker compose run --rm api alembic upgrade head` before restarting the API. Phase 2 upgrades existing databases from revision `0001` to `0002`.
+For an existing Docker setup, rebuild the API image and run `docker compose run --rm api alembic upgrade head` before restarting the API. Phase 4 adds focus sessions and running intervals in revision `0004`. See the database guide for the legacy-session preflight.
 
 Use `alembic current` to inspect the deployed revision and `alembic check` to detect model drift. Pass either command to `docker compose run --rm api` when using Docker. Review generated revisions before applying them. The initial downgrade drops Phase 1 tables and their data.
 

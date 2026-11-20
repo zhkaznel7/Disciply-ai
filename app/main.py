@@ -12,6 +12,8 @@ from app.api import router
 from app.config import Settings
 from app.db import make_engine
 from app.errors import APIError, error_response
+from app.focus_api import router as focus_router
+from app.habit_api import router as habit_router
 from app.middleware import RequestGuards
 from app.planning_api import router as planning_router
 from app.security import API_PATH, Passwords
@@ -48,6 +50,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.include_router(router)
     app.include_router(planning_router)
+    app.include_router(habit_router)
+    app.include_router(focus_router)
 
     @app.exception_handler(APIError)
     async def handle_api_error(request: Request, exc: APIError):

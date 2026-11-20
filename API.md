@@ -54,3 +54,61 @@ Date fields use `YYYY-MM-DD`. Task timestamps require an ISO 8601 UTC offset or 
 Daily returns `date`, `timezone`, and `tasks`. Weekly returns `start_date`, `timezone`, and `days` with exactly seven Monday–Sunday entries. Each entry contains a `date` and a `tasks` array. Both responses include `limit`, `offset`, and `has_more`. Weekly pagination applies to all tasks in the week, so days with no matching tasks on the requested page have empty arrays.
 
 Tasks are grouped by the stored local schedule date. Each day orders timed tasks by start instant, then untimed tasks by descending priority. Equal start times use priority, creation time, and ID as tie-breakers. Historical schedule dates remain stable after timezone changes. The planner uses the saved IANA timezone, with UTC as the default.
+
+## Habits and streaks
+
+All habit routes use the same authenticated session and Origin rules as planning. The paths below are relative to `/api/v1/habits`. Lists use the existing `items`, `limit`, `offset`, and `has_more` envelope and limits.
+
+| Path | Methods | Behavior |
+| --- | --- | --- |
+| / | GET, POST | List habits, optionally filtering by `status=active` or `status=archived`, or create a habit. Use `/api/v1/habits` without a trailing slash. |
+| /{habit_id} | GET, PATCH, DELETE | Read, edit, archive or restore through `status`, or permanently delete the habit and its logs. |
+| /{habit_id}/logs | GET, POST | List newest local dates first with optional inclusive `from_date` and `to_date`, or add a log. |
+| /{habit_id}/logs/{log_id} | PATCH, DELETE | Replace the completion count or remove the log. |
+| /{habit_id}/stats | GET | Current and longest streak, streak unit, last completed date, lifetime completion percentage, and week and month progress. |
+| /summary | GET | Active habit count, completed habits today, and aggregate today, week, and month rates. |
+| /today | GET | Active habit records with today's count, scheduled flag, and completed flag. |
+| /weekly, /monthly | GET | Active habit records with progress for the current local week or calendar month. |
+
+Example create body:
+
+```json
+{"title":"Read","description":"Pages read","frequency":"weekdays","weekdays":[0,2,4],"target_count":10,"preferred_time":"19:30","starts_on":"2026-01-05"}
+```
+
+Use `frequency: "daily"` for every day, `"weekdays"` for distinct days numbered Monday 0 through Sunday 6, or `"weekly"` with `weekly_target` of 1–7 distinct completion days per week. A log is complete when its count meets the daily `target_count`, even for weekly habits. Counts and daily targets accept integers from 1 to 1,000,000 and default to 1. A preferred time is a local wall-clock time. Dates default to the account's local today for habit creation and log creation. For example, POST `{"count":10}` to the habit's logs and PATCH `{"count":12}` to change that log. Responses include the log ID, habit ID, local `date`, `count`, `created_at`, and `updated_at`. Progress responses contain `completed`, `target`, and `completion_percentage` on a 0–100 scale, for example `{"completed":2,"target":3,"completion_percentage":66.67}`. An empty target yields zero percent.
+
+Create returns 201, reads and updates return 200, and deletes return 204. A missing or inaccessible ID returns 404, including a log ID under the wrong habit. Invalid schedules, dates outside the eligible range, and invalid counts return 422. Duplicate-date creation, archived-habit log writes, and schedule changes while logs exist return 409. Archived habits retain readable logs and statistics. Restoring permits writes and includes elapsed dates in streak calculations.
+
+### Calendar and streak rules
+
+- Local dates use the account's saved IANA timezone, defaulting to UTC. Stored log dates remain stable across timezone changes. Logs must be on or after the habit start, on a scheduled date, and on or before local today.
+- Daily streaks count consecutive completed dates. Selected-weekday streaks count consecutive completed scheduled dates and skip other weekdays. An unfinished scheduled date today keeps a streak alive. If that date remains incomplete tomorrow, the gap breaks it.
+- Weekly streaks count consecutive Monday–Sunday weeks meeting the weekly target. The first week caps the target at the number of days available after habit start. An unfinished current week keeps the previous streak alive until the week ends.
+- Daily and selected-weekday rates divide completed dates by scheduled dates through today. Weekly-habit rates sum completed days capped at each week’s quota. In monthly progress, week segments are clipped to the calendar month and to the habit start. An ongoing week includes its quota even while some of its days are still ahead. Future weeks are excluded.
+- Today's rate counts habits due today. A weekly habit is due while its quota was still unmet before today. `completed_habits_today` counts all active habits that met their daily count today, including extra completions after a weekly quota was met. Aggregate rates weight each completion opportunity equally.
+- Frequency, weekdays, weekly target, target count, and start date can change only while a habit has no logs. An archived habit's statistics use its archive date as the cutoff. A restored habit uses local today.
+
+## Focus sessions and Pomodoro
+
+All paths below are relative to `/api/v1/focus`. Requests require an authenticated session, and POST requests require an allowed Origin.
+
+| Path | Methods | Behavior |
+| --- | --- | --- |
+| /sessions | POST, GET | Start a session or page through history, most recent start first. Optional filters include `status`, `session_type`, `from_date`, and `to_date`. Dates filter the local start date and are inclusive. |
+| /sessions/current | GET | Return the active or paused session, or JSON `null`. |
+| /sessions/{session_id} | GET | Return the specified session. |
+| /sessions/{session_id}/{action} | POST | Use `pause`, `resume`, `complete`, or `cancel`. |
+| /summary | GET | Today's, this week's, and this month's focus metrics, plus the Pomodoro recommendation. |
+| /daily, /weekly, /monthly | GET | Period totals plus daily rows, including empty days. Accept optional `date=YYYY-MM-DD`, defaulting to local today. Weeks start Monday. |
+| /by-task | GET | Completed focus time grouped by task. Accepts inclusive `from_date` and `to_date`, up to 366 days. Defaults to the month-to-date, or the start of the supplied end date's month. Uses the standard pagination envelope and sorts by focus time descending. |
+
+Start with a JSON body such as `{"session_type":"focus","planned_minutes":25}`. The types `focus`, `short_break`, and `long_break` default to 25, 5, and 15 minutes. Override the duration per start with an integer from 1 through 1440. An optional `task_id` must belong to the account. Deleting the task leaves the session intact and makes its task ID null. Sessions never change task status or start another timer.
+
+Start returns 201. Other successful operations return 200. Session responses include `id`, `task_id`, `session_type`, `status`, `planned_minutes`, `started_at`, `ended_at`, `created_at`, and `updated_at`. Server-calculated fields are `actual_running_microseconds`, `actual_focused_microseconds` (zero for breaks), and `total_paused_microseconds`. A timer can complete before or after its planned duration. The server records elapsed time from UTC timestamps and excludes pauses from running time.
+
+Active sessions can be paused, completed, or cancelled. Paused sessions can be resumed, completed, or cancelled. Completed and cancelled sessions are terminal. A second unfinished session or an invalid transition returns 409. Foreign and missing session or task IDs both return 404. Invalid inputs return 422.
+
+The recommendation requests a long break after four completed focus sessions since the last completed long break. Before that threshold, it recommends a short break after a completed focus session and focus after a completed break or with no history. Completing a long break resets the count. Cancelled sessions do not advance the cycle.
+
+Analytics include completed sessions only. Cancelled sessions retain their elapsed time in history and contribute zero to analytics. Focus and break totals sum running intervals separately, splitting intervals at local date boundaries using the account's IANA timezone. Session counts and average full focus duration are attributed to the local completion date. The average covers completed focus sessions only. Period responses include exact integer microseconds and minutes rounded to six decimals. A null task group includes unlinked sessions and sessions whose tasks were deleted. Analytics are read-only.

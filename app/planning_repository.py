@@ -5,7 +5,7 @@ from uuid import UUID
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Goal, Project, Task, UserSettings
+from app.models import Goal, Project, Task
 from app.planning_schemas import GoalFilters, Pagination, ProjectFilters, TaskFilters
 
 Record = TypeVar("Record", Goal, Project, Task)
@@ -18,12 +18,6 @@ async def owned(
     if lock:
         statement = statement.with_for_update()
     return await db.scalar(statement)
-
-
-async def timezone_name(db: AsyncSession, owner: UUID) -> str:
-    return await db.scalar(
-        sa.select(UserSettings.timezone).where(UserSettings.user_id == owner)
-    ) or "UTC"
 
 
 async def page(db: AsyncSession, statement, filters: Pagination):

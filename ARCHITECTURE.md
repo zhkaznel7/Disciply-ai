@@ -2,7 +2,7 @@
 
 The backend is a modular monolith. `app/main.py` creates the FastAPI application and manages the SQLAlchemy async engine. `app/config.py` validates environment settings. `app/middleware.py` enforces request limits and browser Origin checks. `app/api.py` owns HTTP routes and cookies, `app/schemas.py` defines public payloads, `app/services.py` owns authentication transactions, `app/repositories.py` handles queries, and `app/models.py` defines database constraints. `migrations/` holds explicit Alembic revisions. `tests/` exercises real PostgreSQL through HTTPX and SQLAlchemy.
 
-Future habits, focus sessions, and analytics should follow the domain router, service, and owner-scoped query pattern under `/api/v1`. Reuse the authenticated-user dependency and take ownership from the verified session. Pass the resulting user ID explicitly to repository methods. Cross-table owner constraints provide a second check in PostgreSQL.
+Future analytics should follow the domain router, service, and owner-scoped query pattern under `/api/v1`. Reuse the authenticated-user dependency and take ownership from the verified session. Pass the resulting user ID explicitly to repository methods. Cross-table owner constraints provide a second check in PostgreSQL.
 
 ## Authentication and deployment
 
@@ -19,3 +19,11 @@ The access-cookie and JWT integration follows the [FastAPI cookie documentation]
 ## Planning modules
 
 `planning_api.py` uses the existing authenticated-user dependency. `planning_schemas.py` defines write fields and typed responses. `planning_service.py` validates state transitions and relationships, locks records for mutations, and commits each write atomically. `planning_repository.py` scopes every resource query to the authenticated owner. PostgreSQL composite foreign keys enforce same-owner links independently of the API. The weekly planner uses one bounded task query and groups results into seven local dates.
+
+## Habit tracking
+
+The habits router reuses the existing authenticated-user dependency and shared account timezone lookup. The service owns transactions and locks the habit row before changing either the schedule or logs, so concurrent log and schedule changes see a consistent configuration. Log inserts use the PostgreSQL unique key. The schedule module computes streaks from qualified local dates and computes calendar denominators without generating every historical date. Summary and period endpoints load recent counts in one owner-scoped batch query across habits.
+
+## Focus and Pomodoro
+
+The focus router reuses the existing session authentication and timezone lookup. Lifecycle writes serialize per account, then lock the target session for state transitions. The database also enforces a single unfinished session. Running intervals open on start or resume and close on pause, completion, or cancellation. The analytics service queries owner-scoped intervals and splits them into local-date windows with UTC boundaries, including DST folds, gaps, and skipped dates.
