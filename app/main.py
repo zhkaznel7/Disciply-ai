@@ -16,6 +16,7 @@ from app.focus_api import router as focus_router
 from app.habit_api import router as habit_router
 from app.middleware import RequestGuards
 from app.planning_api import router as planning_router
+from app.productivity_api import router as productivity_router
 from app.security import API_PATH, Passwords
 from app.services import AuthService
 
@@ -52,6 +53,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(planning_router)
     app.include_router(habit_router)
     app.include_router(focus_router)
+    app.include_router(productivity_router)
 
     @app.exception_handler(APIError)
     async def handle_api_error(request: Request, exc: APIError):
@@ -73,6 +75,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(RequestGuards, settings=settings)
     app.add_middleware(
         CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True,
-        allow_methods=["GET", "POST", "PATCH", "DELETE"], allow_headers=["Content-Type"],
+        allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"], allow_headers=["Content-Type"],
     )
     return app

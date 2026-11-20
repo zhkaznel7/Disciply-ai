@@ -48,3 +48,7 @@ HAVING count(*) > 1;
 ```
 
 Schedule migration during a maintenance window because its preflight locks the focus table through backfill. Downgrade to `0003` retains the original session rows and start/end timestamps. Phase 4 state, task associations, and pause intervals are lost on downgrade.
+
+## Phase 5 storage
+
+Phase 5 requires no schema migration. Reflections use the existing `evening_reflections` table and unique owner/date constraint. Daily reports read source records directly. The existing `daily_statistics` table is reserved for future snapshots and is untouched by these endpoints.

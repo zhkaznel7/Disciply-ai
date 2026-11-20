@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import habit_repository as repo
 from app.errors import APIError
-from app.habit_schedule import is_scheduled, monday, month_end, period_progress, progress, streaks
+from app.habit_schedule import daily_status, is_scheduled, monday, month_end, period_progress, progress, streaks
 from app.habit_schemas import (
     DayStatus, HabitCreate, HabitFilters, HabitStats, HabitUpdate, HabitView, LogCreate,
     LogFilters, LogUpdate, LogView, PeriodHabit, Summary,
@@ -158,16 +158,8 @@ class HabitService:
 
     @staticmethod
     def _day_status(habit: Habit, counts: dict[date, int], today: date) -> DayStatus:
-        count = counts.get(today, 0)
-        scheduled = is_scheduled(habit, today)
-        if scheduled and habit.frequency == "weekly":
-            start, end = week_bounds(today)
-            quota = min(habit.weekly_target, (end - max(start, habit.starts_on)).days + 1)
-            met_before_today = sum(day >= max(start, habit.starts_on) and day < today
-                                   and value >= habit.target_count for day, value in counts.items())
-            scheduled = met_before_today < quota
-        return DayStatus(habit=habit, count=count, scheduled=scheduled,
-                         completed=is_scheduled(habit, today) and count >= habit.target_count)
+        count, scheduled, completed = daily_status(habit, counts, today)
+        return DayStatus(habit=habit, count=count, scheduled=scheduled, completed=completed)
 
     async def _snapshot(self, pagination: Pagination | None, include_month: bool):
         timezone = await user_timezone(self.db, self.owner)

@@ -27,3 +27,7 @@ The habits router reuses the existing authenticated-user dependency and shared a
 ## Focus and Pomodoro
 
 The focus router reuses the existing session authentication and timezone lookup. Lifecycle writes serialize per account, then lock the target session for state transitions. The database also enforces a single unfinished session. Running intervals open on start or resume and close on pause, completion, or cancellation. The analytics service queries owner-scoped intervals and splits them into local-date windows with UTC boundaries, including DST folds, gaps, and skipped dates.
+
+## Productivity analytics
+
+The productivity service combines owner-scoped task counts, habit due-day results, focus interval aggregates, and reflection presence for a bounded date range. It reuses Phase 3 schedule evaluation and Phase 4 timezone and focus aggregation. The Discipline Score is a versioned calculation that explains each weighted component. Reports are computed from current records on request. The reflection service uses the existing unique owner/date key for atomic replacement.

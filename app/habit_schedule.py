@@ -87,3 +87,21 @@ def streaks(habit: Habit, qualified: list[date], today: date) -> tuple[int, int]
         previous = unit
     current = run if previous == expected or (grace and previous == expected - 1) else 0
     return current, longest
+
+
+def daily_status(habit: Habit, counts: dict[date, int], day: date) -> tuple[int, bool, bool]:
+    """Return the count, whether the habit is due, and whether it met its daily target."""
+    count = counts.get(day, 0)
+    eligible = is_scheduled(habit, day)
+    due = eligible
+    if eligible and habit.frequency == "weekly":
+        start = monday(day.toordinal())
+        end = min(start + 6, date.max.toordinal())
+        first = max(start, habit.starts_on.toordinal())
+        quota = weekly_quota(habit, start, first, end)
+        met = sum(
+            first <= logged_on.toordinal() < day.toordinal() and value >= habit.target_count
+            for logged_on, value in counts.items()
+        )
+        due = met < quota
+    return count, due, eligible and count >= habit.target_count

@@ -59,7 +59,7 @@ class FocusAnalytics:
         zone = await user_timezone(self.db, self.owner)
         return zone, now_utc().astimezone(zone).date()
 
-    async def _totals(self, start: date, end: date, zone, *, task_report=False):
+    async def daily_totals(self, start: date, end: date, zone, *, task_report=False):
         totals = {start + timedelta(days=offset): Totals()
                   for offset in range((end - start).days + 1)}
         tasks = defaultdict(int)
@@ -100,7 +100,7 @@ class FocusAnalytics:
         zone, today = await self._calendar()
         monday = today - timedelta(days=today.weekday())
         first = today.replace(day=1)
-        totals, _ = await self._totals(min(monday, first), today, zone)
+        totals, _ = await self.daily_totals(min(monday, first), today, zone)
         latest, count = await repo.recent_cycle(self.db, self.owner)
         recommendation = ("long_break" if count >= LONG_BREAK_AFTER else
                           "short_break" if latest == "focus" else "focus")
@@ -127,7 +127,7 @@ class FocusAnalytics:
 
             start = day.replace(day=1)
             end = day.replace(day=monthrange(day.year, day.month)[1])
-        totals, _ = await self._totals(start, end, zone)
+        totals, _ = await self.daily_totals(start, end, zone)
         return PeriodMetrics(
             timezone=zone.key, from_date=start, to_date=end,
             days=[DayMetrics(date=day, **row.view().model_dump()) for day, row in totals.items()],
@@ -141,7 +141,7 @@ class FocusAnalytics:
         validate_dates(start, end)
         if (end - start).days >= 366:
             raise APIError(422, "invalid_input", "Task analytics allow at most 366 days.")
-        _, tasks = await self._totals(start, end, zone, task_report=True)
+        _, tasks = await self.daily_totals(start, end, zone, task_report=True)
         ordered = sorted(tasks, key=lambda task: (-tasks[task], str(task)))
         items = [TaskMetrics(task_id=task, focus_microseconds=tasks[task], focus_minutes=minutes(tasks[task]))
                  for task in ordered[filters.offset:filters.offset + filters.limit]]

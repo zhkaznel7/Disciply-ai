@@ -1,6 +1,6 @@
 # Disciply AI backend
 
-Disciply AI is an async FastAPI backend for account management, goals, projects, tasks, daily and weekly planning, habit tracking, and focus sessions with Pomodoro.
+Disciply AI is an async FastAPI backend for account management, goals, projects, tasks, daily and weekly planning, habit tracking, focus sessions with Pomodoro, daily analytics, and evening reflections.
 
 ## Windows 11 with Docker Desktop
 

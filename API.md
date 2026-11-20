@@ -112,3 +112,25 @@ Active sessions can be paused, completed, or cancelled. Paused sessions can be r
 The recommendation requests a long break after four completed focus sessions since the last completed long break. Before that threshold, it recommends a short break after a completed focus session and focus after a completed break or with no history. Completing a long break resets the count. Cancelled sessions do not advance the cycle.
 
 Analytics include completed sessions only. Cancelled sessions retain their elapsed time in history and contribute zero to analytics. Focus and break totals sum running intervals separately, splitting intervals at local date boundaries using the account's IANA timezone. Session counts and average full focus duration are attributed to the local completion date. The average covers completed focus sessions only. Period responses include exact integer microseconds and minutes rounded to six decimals. A null task group includes unlinked sessions and sessions whose tasks were deleted. Analytics are read-only.
+
+## Daily productivity and evening reflections
+
+All endpoints require an authenticated session. Analytics return the account's IANA timezone and use local calendar dates. PUT and DELETE require an allowed Origin.
+
+| Method and path | Behavior |
+| --- | --- |
+| GET /api/v1/analytics/daily | Optional `date=YYYY-MM-DD`. Defaults to local today. |
+| GET /api/v1/analytics/range | Requires inclusive `from_date` and `to_date`. Returns up to 31 daily rows in date order. |
+| GET /api/v1/reflections/{day} | Returns the owner's entry or 404. |
+| PUT /api/v1/reflections/{day} | Creates or replaces the entry for the local date. Returns 200 with the same entry ID on replacement. |
+| DELETE /api/v1/reflections/{day} | Deletes the entry and returns 204. A missing entry returns 404. |
+
+Report dates and reflection dates cannot be in the future. A reflection body can be `{"notes":"Focused well after lunch","mood":4}`. Notes must contain 1–4000 characters after trimming. Mood is optional and, when supplied, must be an integer from 1 to 5. PUT with an omitted or null mood clears it. Analytics expose only `has_evening_reflection`, and reflection responses use `Cache-Control: no-store`.
+
+Daily rows contain `tasks` and `habits` with `target` (the scheduled count), `completed`, and `completion_percentage`. Only tasks scheduled for the date count. A task earns credit if its current completion timestamp is on or before that local date. Habits use the same due rules as Phase 3, including the Monday-based weekly quota. A currently archived habit contributes only on dates before its local archive date. The `focus` object uses the existing focus report format. Completed sessions contribute running time to each local date they overlap, and completed focus session counts are attributed to their local end date.
+
+### Discipline Score v1
+
+The score is the normalized weighted mean of applicable components, rounded to the nearest integer with ties rounded up. Tasks and habits have weight 40 each and use the exact completion ratios. A category with zero scheduled items is omitted. Focus has weight 20 and divides actual focus time by 25 minutes, capped at 100 percent. Focus participates whenever the day has scheduled work or actual focus time. A day with neither returns a null score, including days with only a reflection or break. For example, half the tasks, half the habits, and 5 minutes of focus yield 44. The breakdown exposes the version, each base weight, applicability, component percentages, and the focus target. Reflections and mood have no score weight.
+
+Reports use current source records. Rescheduling or reopening a task, correcting a log, or restoring a habit can change a past report. Archive and restore intervals are unavailable in the current habit schema.
