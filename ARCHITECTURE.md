@@ -31,3 +31,9 @@ The focus router reuses the existing session authentication and timezone lookup.
 ## Productivity analytics
 
 The productivity service combines owner-scoped task counts, habit due-day results, focus interval aggregates, and reflection presence for a bounded date range. It reuses Phase 3 schedule evaluation and Phase 4 timezone and focus aggregation. The Discipline Score is a versioned calculation that explains each weighted component. Reports are computed from current records on request. The reflection service uses the existing unique owner/date key for atomic replacement.
+
+## AI provider and privacy
+
+The coach and review reuse Phase 5 metrics. Smart planning ranks an owner-scoped candidate set in PostgreSQL. The optional HTTPS Chat Completions adapter receives bounded numeric productivity summaries, ordinal task references, and allowable action codes. It receives no account credentials, IDs, titles, descriptions, reflection notes, or email addresses. With per-request consent, the coach can send the number and average of this week's reflection mood ratings. A small sample can reveal a rating, and provider retention follows the operator's provider agreement.
+
+Provider output selects from validated action codes and bounded task references. The service renders the selected advice from local templates, validates references against the current candidate set and time budget, and has no privileged tools or write operations on productivity records. Requests have an overall deadline, a streamed body cap, an output-token limit, and zero retries. HTTP redirects and environment proxy settings are disabled. [HTTPX client behavior](https://www.python-httpx.org/api/)

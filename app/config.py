@@ -25,6 +25,19 @@ class Settings(BaseSettings):
     max_body_bytes: int = Field(16_384, ge=1024, le=1_048_576)
     auth_attempts_per_minute: int = Field(20, ge=1, le=1000)
 
+    ai_enabled: bool = False
+    ai_provider_url: str | None = None
+    ai_model: str | None = None
+    ai_api_key: SecretStr | None = None
+    ai_timeout_seconds: float = Field(8, ge=1, le=20)
+    ai_daily_requests: int = Field(20, ge=1, le=100)
+    ai_daily_tokens: int = Field(24000, ge=0, le=1000000)
+    ai_max_output_tokens: int = Field(256, ge=64, le=1024)
+
+    @property
+    def ai_configured(self) -> bool:
+        return self.ai_enabled and bool(self.ai_api_key and self.ai_api_key.get_secret_value())
+
     @model_validator(mode="after")
     def check_security(self):
         secret = self.jwt_secret.get_secret_value()
@@ -40,6 +53,19 @@ class Settings(BaseSettings):
             raise ValueError("REFRESH_SECONDS must exceed ACCESS_SECONDS")
         if not self.jwt_issuer.strip() or not self.jwt_audience.strip():
             raise ValueError("JWT issuer and audience are required")
+        if self.ai_configured:
+            url = urlsplit(self.ai_provider_url or "")
+            if (
+                url.scheme != "https" or not url.hostname or url.username is not None
+                or url.query or url.fragment or any(c.isspace() for c in self.ai_provider_url)
+                or not url.path.rstrip("/").endswith("/chat/completions")
+            ):
+                raise ValueError("AI_PROVIDER_URL must be an HTTPS chat/completions endpoint")
+            _ = url.port
+            if not re.fullmatch(r"[A-Za-z0-9_.:/-]{1,120}", self.ai_model or ""):
+                raise ValueError("Set AI_MODEL to an explicit provider model identifier")
+            if not re.fullmatch(r"[\x21-\x7e]{1,512}", self.ai_api_key.get_secret_value()):
+                raise ValueError("AI_API_KEY must be a valid bearer credential")
         production = self.environment == "production"
         if production and not self.cookie_secure:
             raise ValueError("Production requires Secure cookies")

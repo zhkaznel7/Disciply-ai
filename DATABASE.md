@@ -52,3 +52,7 @@ Schedule migration during a maintenance window because its preflight locks the f
 ## Phase 5 storage
 
 Phase 5 requires no schema migration. Reflections use the existing `evening_reflections` table and unique owner/date constraint. Daily reports read source records directly. The existing `daily_statistics` table is reserved for future snapshots and is untouched by these endpoints.
+
+## Phase 6 AI usage
+
+Revision `0005` adds one usage row per owner and UTC day. A row lock serializes request counts and token reservations across workers before outbound calls. The lock is released during provider I/O. Reported token counts replace reservations when available. Unreported attempts retain their reservation for that day, and identical summarized inputs reuse validated selections or fall back while a request is pending or failed. Stored selection data is limited to hashes, bounded action codes, and ordinal task references. No raw prompts or provider responses are stored. Downgrading removes the usage rows and leaves earlier tables intact. Operators can prune expired rows by the indexed date after their reporting window.

@@ -134,3 +134,24 @@ Daily rows contain `tasks` and `habits` with `target` (the scheduled count), `co
 The score is the normalized weighted mean of applicable components, rounded to the nearest integer with ties rounded up. Tasks and habits have weight 40 each and use the exact completion ratios. A category with zero scheduled items is omitted. Focus has weight 20 and divides actual focus time by 25 minutes, capped at 100 percent. Focus participates whenever the day has scheduled work or actual focus time. A day with neither returns a null score, including days with only a reflection or break. For example, half the tasks, half the habits, and 5 minutes of focus yield 44. The breakdown exposes the version, each base weight, applicability, component percentages, and the focus target. Reflections and mood have no score weight.
 
 Reports use current source records. Rescheduling or reopening a task, correcting a log, or restoring a habit can change a past report. Archive and restore intervals are unavailable in the current habit schema.
+
+## Productivity coach and smart planning
+
+These routes require an authenticated session. POST requests require an allowed Origin.
+
+| Method and path | Behavior |
+| --- | --- |
+| GET /api/v1/ai/status | Reports whether the provider is configured and whether rule-based mode is available. |
+| GET /api/v1/ai/usage | Returns this user's UTC-day request count, provider attempts, reported tokens, and charged or reserved token budget. |
+| POST /api/v1/ai/coach | Accepts `{}` or `{"include_reflection_mood":true}`. Returns measured weekly facts, current score, goal progress, and separately labeled suggestions. |
+| POST /api/v1/ai/daily-plan | Accepts `{}` or `{"available_minutes":90}`. Returns ranked tasks, an estimated workload, overload flag, and suggested focus blocks. |
+| POST /api/v1/ai/weekly-review | Returns week-to-date measurements, matched weekdays from the previous week, supported achievements, and suggestions for next week. |
+| GET /api/v1/analytics/weekly | Returns local Monday-to-today productivity metrics. |
+| GET /api/v1/analytics/monthly | Returns local month-to-date productivity metrics. |
+| GET /api/v1/analytics/insights | Returns rule-based insights without using provider quota. |
+
+Suggestions include an action code and short vetted text, for example `{"code":"focus_block","text":"Try one distraction-free focus block and take a short break afterward."}`. Source is `rules`, `provider`, or `cache`. Measurements always come from application records. Reviews use null comparisons when the required measurements are absent. The current day may be partial, and historical reports still reflect edits to source records.
+
+Planning ranks overdue tasks first, then tasks due today, tasks scheduled today, and remaining incomplete tasks. Within each group it considers priority, deadline, and schedule. The response displays up to 20 candidates, flags truncation through the candidate count and overload flag, and estimates workload for the displayed tasks. A timed slot today supplies an estimate from the existing schedule. Other tasks use a 15- or 25-minute estimate based on recent focus activity. Suggested focus blocks preserve an existing upcoming start when available and otherwise have a null start. They do not reserve calendar time or alter records.
+
+A request limit breach returns 429. Provider failures, invalid selections, unavailable token budget, or concurrent identical outbound requests fall back to rules. UTC counters reset at midnight. Requests served from cache or rules count toward the request limit.

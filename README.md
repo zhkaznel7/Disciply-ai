@@ -52,8 +52,14 @@ $env:TEST_DATABASE_URL = Read-Host 'Dedicated PostgreSQL asyncpg test database U
 Remove-Item Env:TEST_DATABASE_URL
 ```
 
-For an existing Docker setup, rebuild the API image and run `docker compose run --rm api alembic upgrade head` before restarting the API. Phase 4 adds focus sessions and running intervals in revision `0004`. See the database guide for the legacy-session preflight.
+For an existing Docker setup, rebuild the API image and run `docker compose run --rm api alembic upgrade head` before restarting the API. The current Alembic revision is `0005`. See the database guide for prior migration preflight requirements.
 
 Use `alembic current` to inspect the deployed revision and `alembic check` to detect model drift. Pass either command to `docker compose run --rm api` when using Docker. Review generated revisions before applying them. The initial downgrade drops Phase 1 tables and their data.
 
 See [Architecture](ARCHITECTURE.md), [Database](DATABASE.md), and [API](API.md).
+
+## Optional AI provider
+
+Local development defaults to deterministic recommendations. To enable external AI, set `AI_ENABLED=true`, `AI_PROVIDER_URL` to the operator-selected HTTPS Chat Completions endpoint, `AI_MODEL` to its model identifier, and `AI_API_KEY` through environment-based secret configuration. The configured endpoint must support JSON response mode and `max_completion_tokens`. There is no automatic provider or model switch. Apply `alembic upgrade head` before starting this release.
+
+`AI_DAILY_REQUESTS` and `AI_DAILY_TOKENS` control per-account UTC-day admission. `AI_TIMEOUT_SECONDS` and `AI_MAX_OUTPUT_TOKENS` bound outbound calls. The token reservation uses request bytes, fixed framing overhead, and the output limit. Providers use different tokenizers and may report usage above the reservation, which can exhaust the remaining budget. Unreported usage retains the reservation. This is an admission control, and billing limits should also be configured with the provider.

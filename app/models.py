@@ -2,6 +2,7 @@ from datetime import date, datetime, time
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -262,3 +263,21 @@ class RefreshCredential(Record, Base):
     )
     digest: Mapped[bytes] = mapped_column(sa.LargeBinary(32), unique=True)
     consumed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+
+
+class AIUsage(Record, Owned, Base):
+    __tablename__ = "ai_usage"
+    __table_args__ = (
+        sa.UniqueConstraint("user_id", "usage_on"),
+        sa.CheckConstraint(
+            "request_count >= 0 AND provider_calls >= 0 AND reported_tokens >= 0 "
+            "AND budgeted_tokens >= reported_tokens", name="nonnegative_usage",
+        ),
+        sa.Index(None, "usage_on"),
+    )
+    usage_on: Mapped[date]
+    request_count: Mapped[int] = mapped_column(server_default="0")
+    provider_calls: Mapped[int] = mapped_column(server_default="0")
+    reported_tokens: Mapped[int] = mapped_column(server_default="0")
+    budgeted_tokens: Mapped[int] = mapped_column(server_default="0")
+    selections: Mapped[dict] = mapped_column(JSONB, server_default=sa.text("'{}'::jsonb"))

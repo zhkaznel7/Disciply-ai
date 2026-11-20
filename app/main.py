@@ -1,6 +1,7 @@
 import secrets
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy import text
@@ -8,6 +9,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from starlette.exceptions import HTTPException
 from starlette.middleware.cors import CORSMiddleware
 
+from app.ai_api import router as ai_router
+from app.ai_provider import CompatibleProvider
 from app.api import router
 from app.config import Settings
 from app.db import make_engine
@@ -38,7 +41,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             passwords = Passwords()
             dummy_hash = await passwords.hash(secrets.token_urlsafe(32))
             app.state.auth = AuthService(settings, passwords, dummy_hash)
-            yield
+            app.state.ai_settings = settings
+            app.state.ai_provider = None
+            if settings.ai_configured:
+                async with httpx.AsyncClient(
+                    timeout=settings.ai_timeout_seconds, follow_redirects=False, trust_env=False,
+                    limits=httpx.Limits(max_connections=16, max_keepalive_connections=8),
+                ) as provider_client:
+                    app.state.ai_provider = CompatibleProvider(settings, provider_client)
+                    yield
+            else:
+                yield
         finally:
             await engine.dispose()
 
@@ -54,6 +67,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(habit_router)
     app.include_router(focus_router)
     app.include_router(productivity_router)
+    app.include_router(ai_router)
 
     @app.exception_handler(APIError)
     async def handle_api_error(request: Request, exc: APIError):
