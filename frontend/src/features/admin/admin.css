@@ -1,0 +1,51 @@
+.admin-page h2,.admin-card h2 { margin: 0; font-size: 1.08rem; }
+.admin-return { display: inline-flex; align-items: center; gap: .25rem; color: var(--color-muted); margin-bottom: .65rem; }
+.admin-layout,.admin-content,.admin-details,.admin-card { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: .85rem; }
+.admin-layout { margin-top: 1rem; gap: 1rem; }
+.admin-navigation { display: flex; flex-wrap: wrap; gap: .3rem; padding: .45rem; background: var(--color-card); border: 1px solid #3c3c3c; border-radius: .8rem; }
+.admin-navigation a { display: flex; align-items: center; gap: .45rem; min-height: 2.65rem; padding: .45rem .62rem; border-radius: .5rem; color: inherit; text-decoration: none; }
+.admin-navigation a svg { flex: none; }
+.admin-navigation a:hover,.admin-navigation a[aria-current="page"] { background: #1d2816; color: var(--color-lime); }
+.admin-card { padding: clamp(.7rem, 2vw, 1.15rem); overflow-wrap: anywhere; }
+.admin-card :where(p,dl,figure) { margin: 0; }
+.admin-card summary { color: var(--color-lime); cursor: pointer; }
+.admin-filters,.admin-between { display: flex; flex-wrap: wrap; gap: .65rem; align-items: end; }
+.admin-between { align-items: center; justify-content: space-between; }
+.admin-filters label,.admin-field { display: grid; gap: .3rem; min-width: 0; }
+.admin-field { max-width: 100%; }
+.admin-details button,.admin-field select { justify-self: start; }
+.admin-details dl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: .5rem; margin: 0; }
+.admin-details dt,.admin-metrics dt { color: var(--color-muted); }
+.admin-details dd { margin: 0; overflow-wrap: anywhere; }
+.admin-filters select,.admin-field select,.admin-field textarea { max-width: 100%; color: var(--color-ink); background: #161616; border: 1px solid #555; border-radius: .5rem; padding: .52rem; font: inherit; }
+.admin-field textarea { width: 100%; resize: vertical; }
+.admin-filters select:focus-visible,.admin-field :is(select, textarea):focus-visible { outline: 2px solid var(--color-lime); outline-offset: 2px; }
+.admin-preserve { white-space: pre-wrap; }
+.admin-metrics { margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 10.5rem), 1fr)); gap: .75rem; }
+.admin-metrics > div { display: flex; flex-direction: column; justify-content: space-between; gap: .55rem; padding: clamp(.65rem, 1.45vw, 1rem); min-width: 0; }
+.admin-metrics dt { font-size: .88rem; line-height: 1.35; overflow-wrap: anywhere; }
+.admin-metrics dd { margin: 0; color: var(--color-lime); font-weight: 650; font-size: clamp(1rem, 2vw, 1.35rem); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.admin-table-wrap { width: 100%; min-width: 0; overflow: auto; }
+.admin-table-wrap table { width: 100%; border-collapse: collapse; }
+.admin-table-wrap :is(th,td) { text-align: left; padding: .58rem .55rem; border-bottom: 1px solid #3c3c3c; }
+.admin-table-wrap thead { color: var(--color-muted); }
+.admin-audit-table table { min-width: 42rem; table-layout: fixed; }
+.admin-audit-table :is(th,td) { vertical-align: top; overflow-wrap: normal; word-break: normal; }
+.admin-audit-table tr > :first-child { width: 10.5rem; white-space: nowrap; }
+.admin-audit-table tr > :nth-child(2) { width: 10rem; }
+.admin-audit-table tr > :is(:nth-child(3), :nth-child(4)) { width: 7.5rem; }
+.admin-audit-table tr > :last-child { width: 11rem; }
+.admin-audit-table .admin-id summary { white-space: nowrap; }
+.admin-id > code { display: block; margin-top: .25rem; overflow-wrap: anywhere; user-select: all; }
+.admin-table-wrap:focus-visible,.admin-id summary:focus-visible { outline: 2px solid var(--color-lime); outline-offset: -2px; }
+.admin-error { color: #ffb29b; }
+.admin-price { max-width: 26rem; }
+.admin-price-control { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem; }
+.admin-price-control input { flex: 1 1 8rem; min-width: 0; }
+.admin-text-button { color: var(--color-lime); text-decoration: underline; background: transparent; border: 0; font: inherit; cursor: pointer; padding: .3rem 0; }
+@media (max-width: 450px) {
+  .admin-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; }
+  .admin-filters label { flex: 1 1 8rem; }
+  .admin-filters input { max-width: 100%; }
+  .admin-details dl { grid-template-columns: minmax(0, 1fr); }
+}
